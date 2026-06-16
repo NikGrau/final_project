@@ -1,0 +1,478 @@
+---
+title: "What Makes an Elite Footballer? A Look at FIFA 18 Player Data"
+author: "Niklas Grau - ngrau3035@floridapoly.edu"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: show
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+# Global chunk options. I want the code visible but the messages and
+# warnings hidden so the report reads cleanly.
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.5,
+  dpi = 120
+)
+```
+
+## Introduction
+
+I started playing FIFA when I was a kid, thats why I chose this dataset.
+The FIFA 18 dataset is one of those rare sports files that is both huge
+and tidy. EA Sports assigns every player in the game a long list of
+numeric attributes, from sprint speed to composure, and rolls all of
+that into a single headline number called the overall rating.
+
+The thread running through this report is a single question: what
+separates the truly elite players from everyone else, and where in the
+world do those players tend to come from? Along the way I look at how
+ratings change as players age, how much room younger players still have
+to grow, which countries produce the strongest squads on average, and
+finally which on-pitch attributes the rating actually rewards the most.
+
+## Packages
+
+```{r packages}
+library(tidyverse)   # dplyr, ggplot2, readr, tidyr, forcats, stringr
+library(plotly)      # the interactive scatter plot
+library(sf)          # reading the shapefile and drawing the map
+library(broom)       # turning the linear model into a tidy data frame
+library(scales)      # nicer axis labels
+library(htmlwidgets) # saving the interactive plot as a standalone HTML file
+```
+
+## A consistent look
+
+Before plotting anything I set up a small palette and a custom theme so
+that every figure shares the same colors, fonts, and spacing. Keeping
+this in one place means I can change the look of the whole report by
+editing a single block.
+
+```{r theme}
+# A simple football themed palette. Deep pitch green as the main color,
+# a warm orange for callouts and highlights, and a soft grey for context.
+pitch_green  <- "#0b6e4f"
+warm_accent  <- "#e0701b"
+soft_grey    <- "#9aa0a6"
+
+theme_pitch <- function() {
+  theme_minimal(base_size = 13) +
+    theme(
+      plot.title    = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(color = "grey30", margin = margin(b = 10)),
+      plot.caption  = element_text(color = "grey50", size = 9),
+      panel.grid.minor = element_blank(),
+      axis.title    = element_text(color = "grey25"),
+      legend.position = "right"
+    )
+}
+
+# Make the theme the default for every ggplot in the document.
+theme_set(theme_pitch())
+```
+
+With the theme set as the default, I do not have to remember to add it
+to every plot.
+
+## Loading and inspecting the data
+
+```{r load}
+players <- read_csv("../data/fifa18.csv", show_col_types = FALSE)
+
+dim(players)
+```
+
+The file holds 17076 players described by 40 columns. The first few
+columns are descriptive (name, nationality, club, age) and the rest are
+the skill attributes that the game tracks.
+
+```{r}
+players
+```
+
+```{r glimpse}
+glimpse(players[, 1:12])
+```
+
+```{r missing}
+# Quick scan for missing values across every column.
+players %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  pivot_longer(everything(), names_to = "column", values_to = "n_missing") %>%
+  filter(n_missing > 0)
+```
+
+The missing value check comes back empty, which is a pleasant surprise.
+There is nothing to impute or drop, so I can move straight on to the
+analysis. The numeric attributes all sit on a familiar zero to 100
+scale, and a fast look at the ranges confirms that age runs from the mid
+teens up to the late forties and overall ratings span from the mid
+forties up to ninety four.
+
+```{r ranges}
+players %>%
+  summarise(
+    age_min     = min(age),     age_max     = max(age),
+    overall_min = min(overall), overall_max = max(overall),
+    n_countries = n_distinct(nationality),
+    n_clubs     = n_distinct(club)
+  )
+```
+
+So we have a global pool: more than one hundred and sixty nationalities
+spread across several hundred clubs. That spread is exactly what makes
+the map later worth drawing.
+
+## Visualization 1: the career arc, with annotations
+
+My first question is the most intuitive one. How does a player's overall
+rating change as they get older? Footballers are supposed to peak
+somewhere in their late twenties, so I want to see whether the game's
+ratings agree.
+
+```{r age-summary}
+# Average overall rating at each age, keeping only ages with a
+# reasonable number of players so the tails are not noisy.
+age_curve <- players %>%
+  group_by(age) %>%
+  summarise(mean_overall = mean(overall), n = n(), .groups = "drop") %>%
+  filter(n >= 15)
+
+# Find the age where the average rating peaks so I can label it.
+peak <- age_curve %>% slice_max(mean_overall, n = 1)
+peak
+```
+
+```{r age-plot, fig.height=5.5}
+ggplot(age_curve, aes(x = age, y = mean_overall)) +
+  geom_line(color = soft_grey, linewidth = 0.8) +
+  geom_point(aes(size = n), color = pitch_green, alpha = 0.8) +
+  # A vertical guide and a text callout marking the peak age.
+  geom_vline(xintercept = peak$age, linetype = "dashed", color = warm_accent) +
+  annotate(
+    "text",
+    x = peak$age + 0.5, y = min(age_curve$mean_overall) + 1,
+    label = paste0("Ratings peak around age ", peak$age),
+    hjust = 0, color = warm_accent, fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 17, y = max(age_curve$mean_overall) - 0.5,
+    label = "Teenagers are rated low\non current ability",
+    hjust = 0, color = "grey40", size = 3.4, lineheight = 0.95
+  ) +
+  scale_size_continuous(name = "Players at this age", range = c(1, 6), labels = comma) +
+  labs(
+    title = "A footballer's rating over age",
+    subtitle = "Average FIFA 18 overall rating by age, for ages with at least 15 players",
+    x = "Age",
+    y = "Average overall rating"
+  )
+```
+
+The curve tells a continuous story. Average ratings climb steadily
+through a player's early twenties, flatten out into a broad plateau, and
+reach their high point around age of 31. After that the line drifts
+down, but slowly, which fits the idea that experience and composure keep
+older players useful even as their physical attributes fade. The dot
+sizes are worth noticing too, since most players in the game are
+clustered in their early and middle twenties, and the very high and very
+low ages are thin on numbers.
+
+## Visualization 2: room to grow (interactive)
+
+The age curve hints that young players are rated low because the game
+scores their current ability, not their ceiling. FIFA 18 actually tracks
+that ceiling directly with a separate potential rating. Plotting current
+overall against potential should show the gap, and an interactive chart
+lets the reader hover over individual players to see who sits where.
+
+```{r interactive-data}
+# Focus on players rated 70 or higher. That keeps the chart responsive
+# and centers it on players who actually matter competitively.
+talent <- players %>%
+  filter(overall >= 70) %>%
+  mutate(
+    growth = potential - overall,
+    # Build a tidy hover label for each point.
+    label = paste0(
+      name, "<br>",
+      club, " (", nationality, ")<br>",
+      "Age: ", age, "<br>",
+      "Overall: ", overall, "  Potential: ", potential
+    )
+  )
+
+nrow(talent)
+```
+
+```{r interactive-plot}
+gg_growth <- ggplot(talent, aes(x = overall, y = potential, text = label)) +
+  # The reference line where potential equals current ability.
+  geom_abline(slope = 1, intercept = 0, color = soft_grey, linetype = "dashed") +
+  geom_point(aes(color = age), alpha = 0.6, size = 1.6) +
+  scale_color_gradient(low = warm_accent, high = pitch_green, name = "Age") +
+  labs(
+    title = "How much room does a player still have to grow?",
+    subtitle = "Players rated 70 or above. Points above the line still have upside.",
+    x = "Current overall rating",
+    y = "Potential rating"
+  )
+
+# Turn the ggplot into an interactive plotly chart driven by the hover text.
+interactive_growth <- ggplotly(gg_growth, tooltip = "text")
+interactive_growth
+```
+
+```{r save-widget}
+# Save a fully self contained copy of the interactive chart so it can be
+# opened on its own without the rest of the report.
+saveWidget(
+  interactive_growth,
+  file = "interactive_potential_overall.html",
+  selfcontained = TRUE
+)
+```
+
+Reading this chart is mostly about the dashed diagonal. Every point on
+the line is a player whose potential matches their current rating, which
+is the game's way of saying they are as good as they are going to get.
+Points that float above the line still have upside, and the color makes
+the pattern obvious, since the orange younger players sit high above the
+line while the green older players hug it. Hovering over the points up
+in the top right corner turns up the names, and the cluster of young
+orange dots on the left is where clubs go bargain hunting for future
+stars.
+
+## Visualization 3: where the talent lives (spatial)
+
+If individual players have a story, so countries do as well. I want a
+world map shaded by the average overall rating of each nation's players.
+This needs two pieces: a summary of the ratings by country, and a
+shapefile that knows the shape of each country.
+
+The tricky part is that the names do not line up cleanly. FIFA lists
+England, Scotland, Wales, and Northern Ireland separately, while the map
+only knows the United Kingdom. Several other countries use different
+spellings between the two sources. I handle this with an explicit recode
+step, and I fold the four home nations into the United Kingdom so that
+England's large player pool does not simply vanish from the map.
+
+```{r country-recode}
+# Translate FIFA nationality names into the names used by the shapefile.
+# Anything not listed here already matches, so it passes through unchanged.
+recode_country <- function(x) {
+  dplyr::recode(x,
+    "England"              = "United Kingdom",
+    "Scotland"             = "United Kingdom",
+    "Wales"                = "United Kingdom",
+    "Northern Ireland"     = "United Kingdom",
+    "Republic of Ireland"  = "Ireland",
+    "United States"        = "United States of America",
+    "Korea Republic"       = "South Korea",
+    "Korea DPR"            = "North Korea",
+    "Serbia"               = "Republic of Serbia",
+    "Czech Republic"       = "Czechia",
+    "DR Congo"             = "Democratic Republic of the Congo",
+    "Congo"                = "Republic of the Congo",
+    "Bosnia Herzegovina"   = "Bosnia and Herzegovina",
+    "FYR Macedonia"        = "North Macedonia",
+    "Guinea Bissau"        = "Guinea-Bissau",
+    "Central African Rep." = "Central African Republic",
+    "China PR"             = "China",
+    "Trinidad & Tobago"    = "Trinidad and Tobago",
+    .default = x
+  )
+}
+
+country_stats <- players %>%
+  mutate(country = recode_country(nationality)) %>%
+  group_by(country) %>%
+  summarise(mean_overall = mean(overall), n_players = n(), .groups = "drop") %>%
+  # Require a minimum squad size so a single star cannot dominate a country.
+  filter(n_players >= 20)
+
+# The strongest countries by average rating, just to sanity check the result.
+country_stats %>% slice_max(mean_overall, n = 8)
+```
+
+```{r read-shapefile}
+# Read the Natural Earth country outlines and drop Antarctica.
+world <- st_read("../data/ne_countries/ne_110m_admin_0_countries.shp", quiet = TRUE) %>%
+  filter(ADMIN != "Antarctica")
+
+# Attach the rating summary to each country polygon.
+world_rated <- world %>%
+  left_join(country_stats, by = c("ADMIN" = "country"))
+```
+
+```{r map-plot, fig.height=5.5}
+# A label for the single highest rated country, placed at its centroid.
+top_country <- country_stats %>% slice_max(mean_overall, n = 1)
+
+ggplot(world_rated) +
+  geom_sf(aes(fill = mean_overall), color = "white", linewidth = 0.1) +
+  scale_fill_gradient(
+    low = "#e6f2ec", high = pitch_green,
+    na.value = "grey92", name = "Average\noverall"
+  ) +
+  coord_sf(crs = "+proj=robin") +
+  labs(
+    title = "Average player rating by country",
+    subtitle = paste0(
+      "Countries with at least 20 players. ",
+      top_country$country, " has the highest average."
+    ),
+    caption = "Grey countries had fewer than 20 players in the data."
+  ) +
+  theme(
+    axis.text = element_blank(),
+    panel.grid = element_blank()
+  )
+```
+
+The darkest countries are not always the ones you would expect, because
+this is an average rather than a count, so a small footballing nation
+that only sends its very best players abroad can score higher than a
+country that produces thousands of players at every level. The countries
+shaded grey simply did not clear the twenty player threshold, which is
+why a lot of the map is blank. The headline is that strength in this
+game is spread fairly widely across Europe and South America, with
+pockets elsewhere, rather than being concentrated in one corner of the
+world.
+
+## Visualization 4: what the rating actually rewards (model)
+
+The last question is the most analytical. The overall rating is a single
+number, but it is built from dozens of attributes. Which of those
+attributes carry the most weight? A linear model is a clean way to ask
+this. I regress overall rating on a handful of skill attributes, and
+because the attributes live on the same zero to 100 scale but have
+different spreads, I standardize them first so the coefficients can be
+compared directly.
+
+```{r model-fit}
+# Pick a set of attributes that cover passing, finishing, physicality,
+# and mentality, then standardize each one to mean zero and unit variance.
+model_data <- players %>%
+  select(overall, reactions, composure, short_passing, vision,
+         ball_control, strength, stamina, interceptions,
+         finishing, sprint_speed) %>%
+  mutate(across(-overall, ~ as.numeric(scale(.))))
+
+fit <- lm(overall ~ ., data = model_data)
+
+# Pull out the model fit summary.
+glance(fit) %>% select(r.squared, adj.r.squared, sigma)
+```
+
+```{r model-coef-plot, fig.height=5.5}
+# Tidy the coefficients with confidence intervals, drop the intercept,
+# and tidy up the attribute names for the labels.
+coefs <- tidy(fit, conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(term = str_replace_all(term, "_", " ")) %>%
+  arrange(estimate)
+
+ggplot(coefs, aes(x = estimate, y = fct_reorder(term, estimate))) +
+  geom_vline(xintercept = 0, color = soft_grey, linetype = "dashed") +
+  geom_pointrange(
+    aes(xmin = conf.low, xmax = conf.high),
+    color = pitch_green, fatten = 3
+  ) +
+  labs(
+    title = "Which attributes drive a player's overall rating?",
+    subtitle = "Standardized coefficients from a linear model.",
+    x = "Effect on overall rating (per one standard deviation)",
+    y = NULL,
+    caption = "Horizontal lines show 95 percent confidence intervals."
+  )
+```
+
+The model explains the rating extremely well, with an R squared above
+0.75, which tells us these eleven attributes capture most of what goes
+into the headline number. The coefficient plot then ranks them.
+Reactions sits far out in front, followed by composure, which is
+interesting because neither one is a flashy attribute that a casual fan
+like me would name first. The game seems to treat a player's mental
+sharpness and ability to stay calm as the backbone of quality, while
+crowd pleasing traits like finishing and raw sprint speed matter, but
+matter less. The confidence intervals are tight because the sample is so
+large, so the ordering here is something we can trust rather than an
+artifact of noise.
+
+I am not sure why we get negative coefficients for attributes like
+finishing and interceptions. My assumption is, that these are an
+artifact of the attributes being highly correlated and of pooling every
+position into one model, so they should not be taken at face value.
+
+## Discussion
+
+### What I set out to make, and how the data needed cleaning
+
+My original plan was three charts that built on each other: a
+relationship between age and rating, a geographic view of where players
+come from, and a model of what drives the rating. The age curve grew an
+interactive companion once I noticed the potential column, which gave me
+the room to grow chart, and that ended up being the most engaging piece.
+
+The cleaning itself was light in one sense, since there were no missing
+values anywhere, but the country names were a genuine headache. The
+mismatch between FIFA's home nations and the single United Kingdom
+polygon on the map would have quietly dropped more than two thousand
+players if I had ignored it. Building the explicit recode function and
+folding the home nations together was the single most important
+wrangling step in the whole project. The other recurring decision was
+filtering. Averages over tiny groups are meaningless, so I set minimum
+counts both for the age curve and for the country map.
+
+### The story, the difficulties, and what else I would try
+
+If I had to summarize the report in one sentence, it would be that a
+player's value in FIFA 18 is mostly about mentality and arrives in the
+late twenties, and that the talent behind it is spread broadly rather
+than hoarded by a few countries. Each chart adds a layer to that idea.
+
+The difficulties were mostly practical. Getting seventeen thousand
+points into an interactive plot without it becoming sluggish meant
+filtering down to the players rated seventy and above, which I think is
+a fair trade since those are the players worth inspecting one by one.
+The map projection and the name matching took a few tries to get right.
+Standardizing the model inputs was important too, because without it the
+raw coefficients would have been impossible to compare side by side.
+
+There is plenty more to explore. Splitting players into goalkeepers and
+outfield players would sharpen the model, since the goalkeeping
+attributes behave very differently from the rest. A count based map
+showing where the sheer volume of players comes from would pair nicely
+with the average based map already here. And it would be fun to model
+potential rather than overall, to see whether the game rewards a
+different mix of traits when it is guessing at the future instead of
+grading the present.
+
+### How I applied the principles of good visualization
+
+I tried to let each chart make one clear point. The age curve uses a
+single line and a couple of annotations so the eye goes straight to the
+peak. The interactive scatter leans on a reference line so the reader
+has something to measure against, and color carries the secondary age
+story without cluttering the axes. The map uses a sequential green scale
+that runs from light to dark, which matches the natural reading of low
+to high, and grey is reserved for missing data so it never competes with
+the real values. The model plot is sorted by effect size so the ranking
+is the first thing you see, and the confidence intervals are shown
+rather than hidden. Throughout, I kept one palette and one theme so the
+report feels like a single document rather than four unrelated images.

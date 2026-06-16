@@ -1,0 +1,311 @@
+---
+title: "A Century of World Cup Football"
+author: "Niklas Grau (ngrau3035@floridapoly.edu)"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: kable
+    fig_width: 8
+    fig_height: 5
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+library(tidyverse)
+library(scales)
+```
+
+# Introduction
+
+This little project looks at every match played at the FIFA World Cup
+from the first tournament in Uruguay in 1930 up to Brazil in 2014. The
+file `WorldCupMatches.csv` lists one row per game and records who
+played, how many goals each side scored, where the game took place, and
+how many people came to watch.
+
+I grew up watching the World Cup with my family, so when I saw this
+dataset in the list I knew right away it was the one I wanted to dig
+into. My goal was not to build something fancy. I wanted three clean
+charts that each answer one simple question a casual fan might actually
+ask.
+
+# Loading the data
+
+I keep the raw download in the `data/` folder and read it from there so
+the whole report runs the same way on any machine.
+
+```{r load}
+matches_raw <- read_csv("../data/WorldCupMatches.csv", show_col_types = FALSE)
+
+dim(matches_raw)
+```
+
+# Getting the data ready
+
+The first thing I noticed is that the raw file is messy. It has
+thousands of completely blank rows hanging off the bottom, and many of
+the real games are repeated. Before doing anything else I drop the empty
+rows and remove exact duplicates.
+
+```{r clean1}
+matches <- matches_raw %>%
+  filter(!is.na(MatchID)) %>%   # blank rows have no match id
+  distinct()                    # drop repeated rows
+
+dim(matches)
+```
+
+That takes the file from over four thousand rows down to the real set of
+games.
+
+A second problem hides inside the team names. A handful of countries
+come through with a stray `rn">` stuck to the front, which is a leftover
+from however the data was scraped. I strip that out, trim any spare
+spaces, and while I am at it I add one new column for the total goals
+scored in each game.
+
+```{r clean2}
+matches <- matches %>%
+  mutate(
+    `Home Team Name` = str_remove_all(`Home Team Name`, 'rn">') %>% str_trim(),
+    `Away Team Name` = str_remove_all(`Away Team Name`, 'rn">') %>% str_trim(),
+    total_goals = `Home Team Goals` + `Away Team Goals`
+  )
+
+glimpse(matches %>% select(Year, Stage, `Home Team Name`, `Away Team Name`,
+                           `Home Team Goals`, `Away Team Goals`, total_goals,
+                           Attendance))
+```
+
+# A quick summary of the tournaments
+
+Before plotting anything I like to look at the numbers in a plain table.
+Here is one row per tournament with the number of games, the average
+goals per game, and the average crowd.
+
+```{r summary-table}
+by_year <- matches %>%
+  group_by(Year) %>%
+  summarize(
+    games = n(),
+    goals_per_game = round(mean(total_goals), 2),
+    avg_attendance = round(mean(Attendance, na.rm = TRUE))
+  ) %>%
+  ungroup()
+
+by_year
+```
+
+You can already see the shape of two stories in that table. The
+tournament keeps getting bigger, from eighteen games in 1930 to sixty
+four by the late 1990s, and the goals per game were much higher in the
+early years than they are now. The charts below make those patterns
+easier to feel.
+
+# Chart 1: Goals per game have cooled off since the 1950s
+
+My first question was simple. Are World Cup games as full of goals as
+they used to be? I plot the average goals per game for each tournament
+and mark the highest and lowest points so the eye lands on them straight
+away.
+
+```{r chart-goals}
+peak <- by_year %>% slice_max(goals_per_game, n = 1)
+low  <- by_year %>% slice_min(goals_per_game, n = 1)
+
+ggplot(by_year, aes(x = Year, y = goals_per_game)) +
+  geom_line(color = "#9aa7b1", linewidth = 1) +
+  geom_point(color = "#2c7fb8", size = 2.6) +
+  geom_point(data = peak, color = "#e8702a", size = 3.6) +
+  geom_point(data = low,  color = "#e8702a", size = 3.6) +
+  geom_text(data = peak,
+            aes(label = paste0(Year, ": ", goals_per_game)),
+            vjust = -1.1, color = "#e8702a", fontface = "bold", size = 3.4) +
+  geom_text(data = low,
+            aes(label = paste0(Year, ": ", goals_per_game)),
+            vjust = 1.9, color = "#e8702a", fontface = "bold", size = 3.4) +
+  scale_x_continuous(breaks = by_year$Year) +
+  scale_y_continuous(limits = c(0, 6)) +
+  labs(
+    title = "Goals per game have cooled off since the 1950s",
+    subtitle = "Average goals scored in a World Cup match, by tournament",
+    x = NULL,
+    y = "Goals per game"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+The 1954 tournament in Switzerland was wild, with well over five goals a
+game on average. From there the trend drifts down and bottoms out in
+1990, the famous tournament that pushed the sport to change some of its
+rules afterward. Modern World Cups have settled into a fairly steady
+rhythm of a little under three goals a game.
+
+# Chart 2: The crowds keep growing
+
+My second question was about the people in the stands rather than the
+players on the pitch. Has the World Cup grown into the giant event it is
+talked about as today? I show the average crowd per game for each
+tournament.
+
+```{r chart-attendance}
+ggplot(by_year, aes(x = factor(Year), y = avg_attendance)) +
+  geom_col(fill = "#2c7fb8") +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "The World Cup grew into a global spectacle?",
+    subtitle = "Average attendance per match, by tournament",
+    x = NULL,
+    y = "Average attendance"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+The crowds are not a perfectly smooth climb, because the size of the
+host country and its stadiums matters a lot. The huge 1994 average
+belongs to the United States, where games were played in enormous
+American football stadiums. Still, the overall direction is clear. A
+typical World Cup match now draws roughly twice the crowd it did in the
+early decades.
+
+# Chart 3: The countries that score the most
+
+My last question is the one every fan argues about. Which countries have
+put the ball in the net the most across World Cup history? Because the
+data splits goals into a home side and an away side for each game, I add
+up both for every country and keep the top ten.
+
+```{r chart-teams}
+home_goals <- matches %>%
+  group_by(team = `Home Team Name`) %>%
+  summarize(goals = sum(`Home Team Goals`), .groups = "drop")
+
+away_goals <- matches %>%
+  group_by(team = `Away Team Name`) %>%
+  summarize(goals = sum(`Away Team Goals`), .groups = "drop")
+
+top_teams <- bind_rows(home_goals, away_goals) %>%
+  group_by(team) %>%
+  summarize(goals = sum(goals), .groups = "drop") %>%
+  slice_max(goals, n = 10) %>%
+  mutate(is_brazil = team == "Brazil")
+
+top_teams
+
+ggplot(top_teams, aes(x = goals, y = reorder(team, goals), fill = is_brazil)) +
+  geom_col() +
+  geom_text(aes(label = goals), hjust = -0.2, size = 3.4) +
+  scale_fill_manual(values = c(`TRUE` = "#e8702a", `FALSE` = "#2c7fb8")) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Brazil sits on top of the scoring chart",
+    subtitle = "Total goals scored across all World Cup matches, 1930 to 2014",
+    x = "Total goals",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    legend.position = "none"
+  )
+```
+
+Brazil is way out in front, which fits its reputation as the most
+successful country in the tournament. After that the usual European and
+South American powers fill out the list. The split between Germany and
+Germany FR is worth a note, because the dataset keeps the old West
+Germany record separate from the reunified Germany, so the country is
+really even stronger than its single bar suggests.
+
+# Wrapping up the analysis
+
+Three plain questions, three plain charts. Goals per game have come down
+from their wild peak in the fifties. The crowds have grown as the
+tournament turned into a worldwide event. And a small group of
+countries, led by Brazil, has done most of the scoring.
+
+------------------------------------------------------------------------
+
+# Project write up
+
+## What charts did I plan at the start?
+
+My very first idea was actually a lot busier than what I ended up with.
+I wanted to plot every single match as a dot on a timeline, colored by
+how many goals were scored, almost like a scatter of the whole history
+at once. I also thought about a map of the host cities and a chart
+breaking goals down by the stage of the tournament, like group games
+versus finals.
+
+Once I started sketching those, I realized they were either too
+cluttered to read or needed data the file does not really hold in a
+clean way. The match by match scatter was a wall of dots with no clear
+message. So I stepped back and asked what a normal fan would actually
+want to know, and that gave me the three questions I built the report
+around: are there fewer goals now, are the crowds bigger, and who scores
+the most.
+
+## What story do the charts tell?
+
+Put together, the charts tell the story of a sport that got bigger and
+tighter at the same time. The early World Cups were small affairs with
+smaller crowds but buckets of goals. As the tournament grew into a
+global event with packed stadiums, the football itself became more
+careful and defensive, and the goals per game settled down to a steadier
+number. The last chart adds the human side of that story, which is that
+a handful of footballing nations, with Brazil at the front, have written
+most of the history.
+
+## How did I apply the ideas of good data visualization?
+
+I tried to keep a few principles from the course in mind the whole way
+through.
+
+I led with the message, not the chart type. Every title is a full
+sentence that states the takeaway, so a reader who only looks at the
+headings still gets the point. The subtitles then explain exactly what
+the axes are measuring.
+
+I removed clutter. I used a clean minimal theme, dropped the heavy grid
+lines I did not need, and let white space do some of the work. Nothing
+on the page is there for decoration alone.
+
+I used color with a purpose. The charts mostly stick to one calm blue,
+and I save a single warm orange for the things I want to notice, like
+the highest and lowest scoring years and Brazil's bar. Because color is
+rare, it actually means something when it shows up.
+
+I made the numbers easy to compare. The team chart is sorted from most
+goals to fewest and turned on its side so the country names are easy to
+read, and I put the exact totals at the end of each bar so you do not
+have to guess. The attendance numbers are formatted with commas so a big
+crowd reads as a big crowd at a glance.
+
+Finally, I respected the data. I cleaned out the blank rows, the
+duplicates, and the broken team names before plotting anything, because
+a pretty chart built on messy numbers is worse than no chart at all.
