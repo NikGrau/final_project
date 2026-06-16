@@ -25,6 +25,7 @@ knitr::opts_chunk$set(
 )
 library(tidyverse)
 library(scales)
+library(plotly)   # for the interactive chart further down
 ```
 
 # Introduction
@@ -114,6 +115,21 @@ four by the late 1990s, and the goals per game were much higher in the
 early years than they are now. The charts below make those patterns
 easier to feel.
 
+# Picking colors everyone can read
+
+Before I draw anything I want to settle on colors that work for readers
+who are colorblind, since red and green together are exactly the pair a
+lot of people struggle to tell apart. I use the Okabe and Ito palette
+here, which was built to stay readable under every common form of color
+blindness. One blue for the normal data, one strong orange for the thing
+I want you to notice, and a plain grey for background lines.
+
+```{r palette}
+main_blue <- "#0072B2"  
+accent    <- "#D55E00"   
+context   <- "#9aa7b1"   
+```
+
 # Chart 1: Goals per game have cooled off since the 1950s
 
 My first question was simple. Are World Cup games as full of goals as
@@ -126,16 +142,16 @@ peak <- by_year %>% slice_max(goals_per_game, n = 1)
 low  <- by_year %>% slice_min(goals_per_game, n = 1)
 
 ggplot(by_year, aes(x = Year, y = goals_per_game)) +
-  geom_line(color = "#9aa7b1", linewidth = 1) +
-  geom_point(color = "#2c7fb8", size = 2.6) +
-  geom_point(data = peak, color = "#e8702a", size = 3.6) +
-  geom_point(data = low,  color = "#e8702a", size = 3.6) +
+  geom_line(color = context, linewidth = 1) +
+  geom_point(color = main_blue, size = 2.6) +
+  geom_point(data = peak, color = accent, size = 3.6) +
+  geom_point(data = low,  color = accent, size = 3.6) +
   geom_text(data = peak,
             aes(label = paste0(Year, ": ", goals_per_game)),
-            vjust = -1.1, color = "#e8702a", fontface = "bold", size = 3.4) +
+            vjust = -1.1, color = accent, fontface = "bold", size = 3.4) +
   geom_text(data = low,
             aes(label = paste0(Year, ": ", goals_per_game)),
-            vjust = 1.9, color = "#e8702a", fontface = "bold", size = 3.4) +
+            vjust = 1.9, color = accent, fontface = "bold", size = 3.4) +
   scale_x_continuous(breaks = by_year$Year) +
   scale_y_continuous(limits = c(0, 6)) +
   labs(
@@ -167,10 +183,10 @@ tournament.
 
 ```{r chart-attendance}
 ggplot(by_year, aes(x = factor(Year), y = avg_attendance)) +
-  geom_col(fill = "#2c7fb8") +
+  geom_col(fill = main_blue) +
   scale_y_continuous(labels = comma) +
   labs(
-    title = "The World Cup grew into a global spectacle?",
+    title = "The crowds kept growing as the tournament went global",
     subtitle = "Average attendance per match, by tournament",
     x = NULL,
     y = "Average attendance"
@@ -218,7 +234,7 @@ top_teams
 ggplot(top_teams, aes(x = goals, y = reorder(team, goals), fill = is_brazil)) +
   geom_col() +
   geom_text(aes(label = goals), hjust = -0.2, size = 3.4) +
-  scale_fill_manual(values = c(`TRUE` = "#e8702a", `FALSE` = "#2c7fb8")) +
+  scale_fill_manual(values = c(`TRUE` = accent, `FALSE` = main_blue)) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
   labs(
     title = "Brazil sits on top of the scoring chart",
@@ -241,6 +257,126 @@ South American powers fill out the list. The split between Germany and
 Germany FR is worth a note, because the dataset keeps the old West
 Germany record separate from the reunified Germany, so the country is
 really even stronger than its single bar suggests.
+
+# An interactive look at every tournament
+
+The three charts above each answer one question on their own, but the
+numbers behind them all live in the same little per tournament table. So
+for the interactive piece I wanted one chart where you can pull up the
+whole record of any single World Cup just by pointing at it. The static
+charts force me to split goals and crowds across two pictures. Here they
+sit together, and the reader decides which tournament to inspect.
+
+Each dot is one tournament. Its position left to right is the year, its
+height is the goals per game, the size of the dot is how many games were
+played, and the color is the average crowd. Hovering over a dot brings
+up the exact figures for that year.
+
+```{r interactive}
+plot_df <- by_year %>%
+  mutate(
+    hover = paste0(
+      "Year: ", Year,
+      "<br>Goals per game: ", goals_per_game,
+      "<br>Games played: ", games,
+      "<br>Avg attendance: ", comma(avg_attendance)
+    )
+  )
+
+gg_int <- ggplot(plot_df, aes(x = Year, y = goals_per_game, text = hover)) +
+  geom_line(color = context, linewidth = 0.7) +
+  geom_point(aes(size = games, color = avg_attendance)) +
+  scale_color_viridis_c(labels = comma, name = "Avg crowd") +
+  scale_size_continuous(name = "Games", range = c(2, 7)) +
+  labs(
+    title = "Every World Cup, in one view",
+    subtitle = "Point for each tournament. Hover for the full record.",
+    x = NULL,
+    y = "Goals per game"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+
+ggplotly(gg_int, tooltip = "text")
+```
+
+The viridis color scale I use here is one of those palettes that stays
+readable for colorblind viewers, so the crowd story comes through for
+everyone and not just for people who see the full range of colors.
+
+# Fixing a bad chart: before and after
+
+The assignment asked me to take one chart and improve it, so I went back
+to the attendance chart from earlier. It does its job, but it leaves one
+trap open for the reader, so this is the chart I picked to fix.
+
+## The before
+
+```{r before}
+ggplot(by_year, aes(x = factor(Year), y = avg_attendance)) +
+  geom_col(fill = main_blue) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "The crowds kept growing as the tournament went global",
+    subtitle = "Average attendance per match, by tournament",
+    x = NULL,
+    y = "Average attendance"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+The chart itself is honest, the axis starts at zero and the bars are the
+right height, but it still leaves a trap open. The 1994 bar is the
+tallest on the whole chart, and with nothing pointing it out a reader
+could easily walk away thinking the World Cup suddenly got far more
+popular that year. The real reason is a lot more boring. The 1994
+tournament was hosted in the United States and many of the games were
+played in enormous American football stadiums, so the average crowd was
+pushed up by the size of the venues rather than by any jump in interest.
+The title is fine as a general headline, but it only names the overall
+trend and never warns the reader about the one bar that is most likely
+to be misread.
+
+## The after
+
+```{r after}
+att_df <- by_year %>% mutate(is_1994 = Year == 1994)
+
+ggplot(att_df, aes(x = factor(Year), y = avg_attendance, fill = is_1994)) +
+  geom_col() +
+  annotate("text", x = "1994", y = 71500,
+           label = "1994: huge US\nfootball stadiums",
+           size = 3, color = accent, fontface = "bold", lineheight = 0.9) +
+  scale_fill_manual(values = c(`TRUE` = accent, `FALSE` = main_blue)) +
+  scale_y_continuous(labels = comma, limits = c(0, 78000)) +
+  labs(
+    title = "A typical World Cup match now draws about fifty thousand fans",
+    subtitle = "Average attendance per match, by tournament",
+    x = NULL,
+    y = "Average attendance"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+The improved version fixes that. The single bar for 1994 is now colored
+orange so the eye lands on it right away, and a short note sits just
+above it explaining that the spike comes from the huge US stadiums. That
+way the one bar that actually needs context gets it, instead of quietly
+misleading anyone who only skims the chart.
 
 # Wrapping up the analysis
 
@@ -309,3 +445,16 @@ crowd reads as a big crowd at a glance.
 Finally, I respected the data. I cleaned out the blank rows, the
 duplicates, and the broken team names before plotting anything, because
 a pretty chart built on messy numbers is worse than no chart at all.
+
+## Accessibility, interactivity, and the redesign
+
+I also tried to make the report work for as many readers as possible.
+All the colors come from palettes that stay readable for colorblind
+viewers, and wherever color carries a message I backed it up with a
+label or a sorted order so nobody has to rely on color alone.
+
+The interactive tournament chart is the part I had the most fun with. A
+static chart shows you one fixed view, but this one lets the reader
+hover to read the exact goals, games, and crowd for any World Cup, and
+zoom into the busy modern years instead of squinting at a cluster. It
+turns the per tournament table into something you can actually poke at.
