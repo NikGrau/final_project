@@ -27,7 +27,8 @@ and goals per game, sized by the number of games, and colored by the average
 crowd. Hovering over a dot brings up the exact figures for that year, and you can
 zoom into the crowded modern tournaments and pan around.
 
-**Accessibility.** The colors
+**Accessibility.** Every figure has alt text written into its chunk through the
+fig.alt option, so a screen reader can describe what the chart shows. The colors
 come from the Okabe and Ito palette and from viridis, both of which were built to
 stay readable for people with color blindness. Wherever color carries a meaning,
 such as Brazil's highlighted bar or the orange 1994 attendance bar, I backed it up

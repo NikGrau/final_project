@@ -125,7 +125,7 @@ blindness. One blue for the normal data, one strong orange for the thing
 I want you to notice, and a plain grey for background lines.
 
 ```{r palette}
-main_blue <- "#0072B2"  
+main_blue <- "#0072B2"   
 accent    <- "#D55E00"   
 context   <- "#9aa7b1"   
 ```
@@ -137,7 +137,7 @@ they used to be? I plot the average goals per game for each tournament
 and mark the highest and lowest points so the eye lands on them straight
 away.
 
-```{r chart-goals}
+```{r chart-goals, fig.alt="Line chart of the average goals scored per World Cup match for each tournament from 1930 to 2014. The line climbs to a peak of about 5.4 goals per game in 1954, then drifts downward over the decades to a low of about 2.2 in 1990, and settles a little under three goals per game in the most recent tournaments. The highest and lowest years are highlighted in orange and labeled."}
 peak <- by_year %>% slice_max(goals_per_game, n = 1)
 low  <- by_year %>% slice_min(goals_per_game, n = 1)
 
@@ -181,7 +181,7 @@ players on the pitch. Has the World Cup grown into the giant event it is
 talked about as today? I show the average crowd per game for each
 tournament.
 
-```{r chart-attendance}
+```{r chart-attendance, fig.alt="Bar chart of the average attendance per match at each World Cup from 1930 to 2014. Bars start at zero. Early tournaments average roughly twenty to thirty thousand fans per game, while recent tournaments sit around fifty thousand. The tallest bar is 1994, hosted by the United States, at close to seventy thousand."}
 ggplot(by_year, aes(x = factor(Year), y = avg_attendance)) +
   geom_col(fill = main_blue) +
   scale_y_continuous(labels = comma) +
@@ -214,7 +214,7 @@ put the ball in the net the most across World Cup history? Because the
 data splits goals into a home side and an away side for each game, I add
 up both for every country and keep the top ten.
 
-```{r chart-teams}
+```{r chart-teams, fig.alt="Horizontal bar chart of the ten countries with the most total goals across all World Cup matches from 1930 to 2014. Bars are sorted from most to fewest goals and each bar is labeled with its exact total. Brazil leads clearly with 221 goals and is highlighted in orange, followed by Argentina, Germany FR, Italy, and France."}
 home_goals <- matches %>%
   group_by(team = `Home Team Name`) %>%
   summarize(goals = sum(`Home Team Goals`), .groups = "drop")
@@ -272,7 +272,7 @@ height is the goals per game, the size of the dot is how many games were
 played, and the color is the average crowd. Hovering over a dot brings
 up the exact figures for that year.
 
-```{r interactive}
+```{r interactive, fig.alt="Interactive scatter plot of World Cup tournaments from 1930 to 2014. Each point is one tournament, positioned by year and by average goals per game, sized by the number of games played, and colored by average attendance. Hovering reveals the exact goals per game, game count, and average crowd for that year."}
 plot_df <- by_year %>%
   mutate(
     hover = paste0(
@@ -313,7 +313,7 @@ trap open for the reader, so this is the chart I picked to fix.
 
 ## The before
 
-```{r before}
+```{r before, fig.alt="The original attendance bar chart, all bars in the same blue. The 1994 bar is the tallest at close to seventy thousand, but nothing on the chart points it out or explains why, so a reader could mistake it for a sudden jump in popularity."}
 ggplot(by_year, aes(x = factor(Year), y = avg_attendance)) +
   geom_col(fill = main_blue) +
   scale_y_continuous(labels = comma) +
@@ -346,7 +346,7 @@ to be misread.
 
 ## The after
 
-```{r after}
+```{r after, fig.alt="The improved version of the same chart. The 1994 bar is now colored orange and a short note above it explains that the spike comes from the huge US football stadiums. Every other bar stays one blue, the axis still starts at zero, the numbers use commas, and the title now states the takeaway."}
 att_df <- by_year %>% mutate(is_1994 = Year == 1994)
 
 ggplot(att_df, aes(x = factor(Year), y = avg_attendance, fill = is_1994)) +
@@ -449,9 +449,10 @@ a pretty chart built on messy numbers is worse than no chart at all.
 ## Accessibility, interactivity, and the redesign
 
 I also tried to make the report work for as many readers as possible.
-All the colors come from palettes that stay readable for colorblind
-viewers, and wherever color carries a message I backed it up with a
-label or a sorted order so nobody has to rely on color alone.
+Every figure has alt text written into the chunk so a screen reader can
+describe it, the colors come from palettes that stay readable for
+colorblind viewers, and wherever color carries a message I backed it up
+with a label or a sorted order so nobody has to rely on color alone.
 
 The interactive tournament chart is the part I had the most fun with. A
 static chart shows you one fixed view, but this one lets the reader
