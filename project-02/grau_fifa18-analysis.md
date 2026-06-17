@@ -34,7 +34,8 @@ shapefile in `data/ne_countries`.
 ## Summary of findings
 
 1. Ratings follow a clear career arc. Average overall ratings climb through a player's
-   early twenties, plateau, and peak around the late twenties before slowly declining.
+   early twenties, plateau through the late twenties, and peak around age 31 before
+   slowly declining.
 2. Younger players carry the most upside. Plotting current rating against potential shows
    a wide gap for young players that closes as they age, which is where clubs look for
    future stars.
@@ -45,24 +46,40 @@ shapefile in `data/ne_countries`.
    composure carry more weight than flashier attributes like finishing or sprint speed,
    and the model explains the overall rating very well.
 
-## Project structure
+## The three required extras, and where they live
 
-```
-fifa18-analysis/
-|- fifa18-analysis.Rproj
-|- data/
-|--- fifa18.csv
-|--- ne_countries/
-|----- ne_110m_admin_0_countries.shp
-|----- ne_110m_admin_0_countries.shx
-|----- ne_110m_admin_0_countries.dbf
-|----- ne_110m_admin_0_countries.prj
-|- report/
-|--- fifa18-analysis.Rmd
-|--- fifa18-analysis.html
-|--- interactive_potential_overall.html
-|- README.md
-```
+
+**An interactive chart.** Visualization 2, titled "How much room does a player still have
+to grow?", is an interactive plotly scatter of current rating against potential for every
+player rated seventy and above. A dashed diagonal marks where a player has reached their
+ceiling. Hovering over any dot pulls up that player's name, club, nationality, age, and
+both ratings. A flat image of seventeen hundred overlapping dots would just be a blob, so the
+hover and the zoom are what make the chart usable at all.
+
+**Accessibility.** Every figure carries alt text through the fig.alt chunk option so a
+screen reader can describe it. The two charts that use color to carry information, the
+interactive scatter and the world map, both use viridis scales, which stay readable for
+colorblind viewers instead of relying on a red to green range that many people cannot
+separate. Where color does carry meaning, I back it up with something else, the dashed
+reference line on the scatter, the sorted order and confidence intervals on the model
+plot, and the dot sizes on the age curve, so nothing depends on color alone.
+
+**A redesign, before and after.** The section "Fixing a bad chart" improves the age curve
+from the start of the report. The first version plotted every age in the data, including
+ages with only one or two players, so the right tail jumped around wildly and made it look
+like players fall apart and then suddenly turn elite again in their mid forties. The fix
+drops every age with fewer than fifteen players, which clears out the noisy tail, and
+sizes each dot by the number of players so the reader can see which points are backed by
+real data. Same data and same question, but the chart stops letting a handful of veterans
+speak for everyone.
+
+## My favorite visualization
+
+My favorite is the interactive room to grow scatter, Visualization 2. It is the chart that
+turns a flat cloud of points into something you can actually explore, and hovering to find
+a cheap young player with a high ceiling sitting well above the line is the closest the
+report gets to feeling like the game itself.
+
 
 
 ## Data source

@@ -156,7 +156,7 @@ peak <- age_curve %>% slice_max(mean_overall, n = 1)
 peak
 ```
 
-```{r age-plot, fig.height=5.5}
+```{r age-plot, fig.height=5.5, fig.alt="Line and point chart of the average FIFA 18 overall rating at each age, for ages that have at least fifteen players. Ratings climb through the early twenties, plateau, and peak around age 31 before slowly declining. Each point is sized by how many players are at that age, showing most players are in their early and middle twenties. A dashed vertical line and a text note mark the peak age."}
 ggplot(age_curve, aes(x = age, y = mean_overall)) +
   geom_line(color = soft_grey, linewidth = 0.8) +
   geom_point(aes(size = n), color = pitch_green, alpha = 0.8) +
@@ -176,7 +176,7 @@ ggplot(age_curve, aes(x = age, y = mean_overall)) +
   ) +
   scale_size_continuous(name = "Players at this age", range = c(1, 6), labels = comma) +
   labs(
-    title = "A footballer's rating over age",
+    title = "A footballer's rating climbs into the late twenties, then eases down",
     subtitle = "Average FIFA 18 overall rating by age, for ages with at least 15 players",
     x = "Age",
     y = "Average overall rating"
@@ -219,12 +219,12 @@ talent <- players %>%
 nrow(talent)
 ```
 
-```{r interactive-plot}
+```{r interactive-plot, fig.alt="Interactive scatter plot of FIFA 18 players rated 70 or higher, plotting current overall rating against potential rating. A dashed diagonal marks where potential equals current ability. Points are colored by age using a colorblind-safe viridis scale, and hovering reveals each player's name, club, nationality, age, overall, and potential. Younger players sit above the line with room to grow while older players hug it."}
 gg_growth <- ggplot(talent, aes(x = overall, y = potential, text = label)) +
   # The reference line where potential equals current ability.
   geom_abline(slope = 1, intercept = 0, color = soft_grey, linetype = "dashed") +
   geom_point(aes(color = age), alpha = 0.6, size = 1.6) +
-  scale_color_gradient(low = warm_accent, high = pitch_green, name = "Age") +
+  scale_color_viridis_c(name = "Age") +
   labs(
     title = "How much room does a player still have to grow?",
     subtitle = "Players rated 70 or above. Points above the line still have upside.",
@@ -251,11 +251,11 @@ Reading this chart is mostly about the dashed diagonal. Every point on
 the line is a player whose potential matches their current rating, which
 is the game's way of saying they are as good as they are going to get.
 Points that float above the line still have upside, and the color makes
-the pattern obvious, since the orange younger players sit high above the
-line while the green older players hug it. Hovering over the points up
-in the top right corner turns up the names, and the cluster of young
-orange dots on the left is where clubs go bargain hunting for future
-stars.
+the pattern obvious, since the darker younger players sit high above the
+line while the brighter older players hug it. This is the chart where
+being interactive really earns its keep. A static picture of seventeen
+hundred overlapping dots would be a blob, but here you can hover any
+point to pull up the player's name, club, age, and both ratings.
 
 ## Visualization 3: where the talent lives (spatial)
 
@@ -319,15 +319,15 @@ world_rated <- world %>%
   left_join(country_stats, by = c("ADMIN" = "country"))
 ```
 
-```{r map-plot, fig.height=5.5}
+```{r map-plot, fig.height=5.5, fig.alt="World map shaded by the average FIFA 18 overall rating of each country's players, for countries with at least twenty players. A colorblind-safe viridis scale runs from light for lower averages to dark for higher averages. Countries with too few players are left grey. Strength is spread fairly widely across Europe and South America with pockets elsewhere."}
 # A label for the single highest rated country, placed at its centroid.
 top_country <- country_stats %>% slice_max(mean_overall, n = 1)
 
 ggplot(world_rated) +
   geom_sf(aes(fill = mean_overall), color = "white", linewidth = 0.1) +
-  scale_fill_gradient(
-    low = "#e6f2ec", high = pitch_green,
-    na.value = "grey92", name = "Average\noverall"
+  scale_fill_viridis_c(
+    option = "mako", direction = -1,
+    na.value = "grey85", name = "Average\noverall"
   ) +
   coord_sf(crs = "+proj=robin") +
   labs(
@@ -379,7 +379,7 @@ fit <- lm(overall ~ ., data = model_data)
 glance(fit) %>% select(r.squared, adj.r.squared, sigma)
 ```
 
-```{r model-coef-plot, fig.height=5.5}
+```{r model-coef-plot, fig.height=5.5, fig.alt="Coefficient plot from a linear model of overall rating on eleven standardized player attributes, sorted by effect size. Reactions has by far the largest positive effect, followed by composure, ball control, and short passing. A few attributes such as finishing and interceptions show small negative coefficients. Each estimate is drawn with a 95 percent confidence interval, all of them tight because the sample is large."}
 # Tidy the coefficients with confidence intervals, drop the intercept,
 # and tidy up the attribute names for the labels.
 coefs <- tidy(fit, conf.int = TRUE) %>%
@@ -418,6 +418,91 @@ I am not sure why we get negative coefficients for attributes like
 finishing and interceptions. My assumption is, that these are an
 artifact of the attributes being highly correlated and of pooling every
 position into one model, so they should not be taken at face value.
+
+## Fixing a bad chart: before and after
+
+The assignment asked me to take one chart and improve it. I went back to
+the age curve from the start of the report, because the first version I
+drew of it had a real problem hiding in the tail.
+
+### The before
+
+```{r before-fifa, fig.height=5.5, fig.alt="The naive age curve, plotting average overall rating for every age in the data with no minimum sample size. The line is smooth through the twenties and thirties but then whips up and down in the forties, dropping to around 55, jumping past 70, and crashing again, which makes it look like players fall apart and then suddenly turn elite late in their careers."}
+# Average overall at EVERY age, with no minimum count behind each point.
+# This is the version that gets the tail badly wrong.
+age_naive <- players %>%
+  group_by(age) %>%
+  summarise(mean_overall = mean(overall), .groups = "drop")
+
+ggplot(age_naive, aes(x = age, y = mean_overall)) +
+  geom_line(color = pitch_green, linewidth = 0.8) +
+  geom_point(color = pitch_green, size = 1.8) +
+  labs(
+    title = "A footballer's rating over age",
+    subtitle = "Average FIFA 18 overall rating by age, every age included",
+    x = "Age",
+    y = "Average overall rating"
+  )
+```
+
+The middle of this chart is fine, but the right tail goes haywire. The
+line sinks to around 55 at age 43, leaps past 70 a year later, then
+drops off a cliff again. Read literally it says footballers collapse and
+then suddenly turn elite in their mid forties, which is plainly not
+true. The problem is that those ages are built on almost nobody. Age 44
+is two players and age 47 is a single player, yet the chart gives each
+of them the same visual weight as age 25, which is averaged over more
+than a thousand players. One unusual veteran can swing the whole line,
+and nothing on the chart warns the reader that the tail is basically
+noise.
+
+### The after
+
+```{r after-fifa, fig.height=5.5, fig.alt="The improved age curve. Ages with fewer than fifteen players are dropped, so the noisy tail is gone and the line becomes a smooth career arc that rises through the twenties, plateaus, and peaks around age 31 before easing down. Each point is sized by the number of players at that age, showing that most players are in their twenties while the older ages are thin. A dashed line and notes mark the peak and the low teenage ratings."}
+# Keep only ages backed by a reasonable number of players, and let the
+# dot size show where the data is solid.
+age_curve <- players %>%
+  group_by(age) %>%
+  summarise(mean_overall = mean(overall), n = n(), .groups = "drop") %>%
+  filter(n >= 15)
+
+peak <- age_curve %>% slice_max(mean_overall, n = 1)
+
+ggplot(age_curve, aes(x = age, y = mean_overall)) +
+  geom_line(color = soft_grey, linewidth = 0.8) +
+  geom_point(aes(size = n), color = pitch_green, alpha = 0.8) +
+  geom_vline(xintercept = peak$age, linetype = "dashed", color = warm_accent) +
+  annotate(
+    "text",
+    x = peak$age + 0.5, y = min(age_curve$mean_overall) + 1,
+    label = paste0("Ratings peak around age ", peak$age),
+    hjust = 0, color = warm_accent, fontface = "bold"
+  ) +
+  annotate(
+    "text",
+    x = 17, y = max(age_curve$mean_overall) - 0.5,
+    label = "Teenagers are rated low\non current ability",
+    hjust = 0, color = "grey40", size = 3.4, lineheight = 0.95
+  ) +
+  scale_size_continuous(name = "Players at this age", range = c(1, 6), labels = comma) +
+  labs(
+    title = "A footballer's rating climbs into the late twenties, then eases down",
+    subtitle = "Average FIFA 18 overall rating by age, for ages with at least 15 players",
+    x = "Age",
+    y = "Average overall rating"
+  )
+```
+
+The fix is not really about color or style, it is about honesty.
+Dropping every age that has fewer than fifteen players clears out the
+whole jittery tail in one move, and the line settles into the believable
+career arc it should have been all along. Sizing each dot by the number
+of players then makes the evidence visible, so the reader can see that
+the twenties rest on huge samples while the late thirties are thin. The
+dashed line marks where the rating really peaks. Same data and same
+question, but the chart now tells the truth instead of letting a few
+lonely veterans shout over everyone else. This cleaned up version is the
+one I lead with as Visualization 1 at the top of the report.
 
 ## Discussion
 
@@ -469,10 +554,31 @@ I tried to let each chart make one clear point. The age curve uses a
 single line and a couple of annotations so the eye goes straight to the
 peak. The interactive scatter leans on a reference line so the reader
 has something to measure against, and color carries the secondary age
-story without cluttering the axes. The map uses a sequential green scale
-that runs from light to dark, which matches the natural reading of low
-to high, and grey is reserved for missing data so it never competes with
-the real values. The model plot is sorted by effect size so the ranking
-is the first thing you see, and the confidence intervals are shown
-rather than hidden. Throughout, I kept one palette and one theme so the
-report feels like a single document rather than four unrelated images.
+story without cluttering the axes. The map uses a sequential viridis
+scale that runs from light to dark, which matches the natural reading of
+low to high, and grey is reserved for missing data so it never competes
+with the real values. The model plot is sorted by effect size so the
+ranking is the first thing you see, and the confidence intervals are
+shown rather than hidden. Throughout, I kept one palette and one theme
+so the report feels like a single document rather than four unrelated
+images.
+
+I also kept accessibility in mind the whole way. Every figure has alt
+text written into its chunk so a screen reader can describe it, and the
+continuous color scales on the interactive scatter and the world map now
+use viridis, which is built to stay readable for colorblind viewers
+rather than relying on a red to green range that many people cannot tell
+apart. Where color carries meaning I leaned on something extra too, like
+the dashed reference line on the scatter and the sorted order and labels
+on the bars, so the message never depends on color alone.
+
+The interactive scatter is the chart that gains the most from being
+interactive. The same seventeen hundred points drawn as a flat image
+would just overlap into a smudge, but hovering and zooming let the
+reader read off any single player and explore the crowded elite corner,
+which is something a static picture cannot offer. And the before and
+after on the age curve was a good reminder that a chart can be perfectly
+honest and still mislead. The first version was not lying, it just let a
+handful of forty something players swing the line as hard as ages backed
+by thousands. The fix was simply to drop the ages with too little data
+behind them and to let the dot sizes show where the evidence is solid.
