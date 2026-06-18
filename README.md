@@ -15,7 +15,7 @@ In the `project_01/` folder you can find a short visual history of the FIFA Worl
 The goals per game line chart, which was my favorite because it overturned what I assumed. I always thought modern football had more goals, not fewer, and seeing the 1954 peak next to the 1990 low made the story click in one picture.
 
 
-![Line chart of average goals per World Cup match by tournament, peaking in 1954 and declining toward 1990.](image.png)
+![Line chart of average goals per World Cup match by tournament, peaking in 1954 and declining toward 1990.](project1_sample.png)
 
 
 ## Project 02
@@ -27,7 +27,7 @@ In this project I dug into the FIFA 18 player dataset, around seventeen thousand
 The interactive room to grow scatter, my favorite from this project. It turns a flat cloud of points into something you can explore, hovering to find a cheap young player with a high ceiling sitting well above the line.
 
 
-![Scatter of player current rating against potential rating, colored by age, with young players sitting above the diagonal where potential exceeds current ability.](newplot.png)
+![Scatter of player current rating against potential rating, colored by age, with young players sitting above the diagonal where potential exceeds current ability.](project2_sample.png)
 
 
 
@@ -40,7 +40,7 @@ In this project I focused on exploring distributions and recreating a set of giv
 The ridgeline plot of maximum temperature by month is my favorite here. Stacking the months and filling each ridge by temperature turns a whole year into one picture of the seasons sliding warmer and back again.
 
 
-![Ridgeline plot of Tampa maximum temperatures by month, ridges filled with the plasma color scale from cool purple to hot yellow, with a median line on each month.](image-1.png)
+![Ridgeline plot of Tampa maximum temperatures by month, ridges filled with the plasma color scale from cool purple to hot yellow, with a median line on each month.](project3_sample.png)
 
 
 ### Moving Forward
